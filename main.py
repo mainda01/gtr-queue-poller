@@ -4,17 +4,21 @@ from datetime import datetime
 import csv
 import os
 
-# This dimension has the highest impact on confidence because a high number of open PRs suggests a backlog, which directly affects the queue and processing time for new PRs.
-backlog_factor = 2
+# This dimension has the highest impact on confidence.
+# A high number of open PRs suggests a backlog, which directly affects the queue and processing time for new PRs.
+backlog_factor = 4
 
-# This dimension provides insight into the team's recent activity. If PRs are being merged regularly, it indicates an active review process, even if the queue is long.
-activity_factor = 1.5
+# This dimension reflects the delay in the review process.
+# If PRs are awaiting approval for a long time, it suggests inefficiencies or unavailability of reviewers.
+delay_factor = 3
 
-# This dimension reflects the delay in the review process. If PRs are awaiting approval for a long time, it suggests inefficiencies or unavailability of reviewers.
-delay_factor = 1.5
+# This dimension shows how quickly PRs are integrated once they are ready.
+# Delays here might indicate issues in the final stages of merging, but it is less critical than the initial approval.
+queue_factor = 2
 
-# This dimension shows how quickly PRs are integrated once they are ready. Delays here might indicate issues in the final stages of merging, but it is less critical than the initial approval.
-queue_factor = 1
+# This dimension provides insight into the team's recent activity.
+# If PRs are being merged regularly, it indicates an active review process, even if the queue is long.
+activity_factor = 1
 
 
 def run_command(cmd):
@@ -65,19 +69,19 @@ def get_oldest_pr_with_label(label):
     return None
 
 
-def calculate_confidence_score(
+def calculate_risk_basis(
     open_pr_count, time_since_last_merged, oldest_waiting_age, oldest_ready_age
 ):
 
     # Calculate confidence score
-    confidence_score = (
+    risk_basis = (
         backlog_factor * open_pr_count
         + activity_factor * time_since_last_merged
         + delay_factor * oldest_waiting_age
         + queue_factor * oldest_ready_age
     )
 
-    return confidence_score
+    return risk_basis
 
 
 def calculate_confidence_percentage(
@@ -85,10 +89,14 @@ def calculate_confidence_percentage(
 ):
 
     # Normalize each dimension
-    open_pr_normalized = max(0, 1 / open_pr_count)
-    last_merged_normalized = max(0, 1 / time_since_last_merged)
-    oldest_waiting_normalized = max(0, 1 / oldest_waiting_age)
-    oldest_ready_normalized = max(0, 1 / oldest_ready_age)
+    open_pr_normalized = max(0, 1 / open_pr_count) if open_pr_count else 1
+    last_merged_normalized = (
+        max(0, 1 / time_since_last_merged) if time_since_last_merged else 1
+    )
+    oldest_waiting_normalized = (
+        max(0, 1 / oldest_waiting_age) if oldest_waiting_age else 1
+    )
+    oldest_ready_normalized = max(0, 1 / oldest_ready_age) if oldest_ready_age else 1
 
     weighted_score = (
         backlog_factor * open_pr_normalized
@@ -104,7 +112,7 @@ def calculate_confidence_percentage(
     return confidence_percentage
 
 
-def save_to_csv(data, filename="confidence_scores.csv"):
+def save_to_csv(data, filename="risk_basiss.csv"):
     file_exists = os.path.isfile(filename)
     with open(filename, mode="a", newline="") as file:
         writer = csv.writer(file)
@@ -116,7 +124,7 @@ def save_to_csv(data, filename="confidence_scores.csv"):
                     "Time Since Last Merge (h)",
                     "Oldest Waiting Age (h)",
                     "Oldest Ready Age (h)",
-                    "Confidence Score",
+                    "Risk Basis",
                     "Confidence Percentage",
                 ]
             )
@@ -149,7 +157,7 @@ if __name__ == "__main__":
         else 0
     )
 
-    confidence_score = calculate_confidence_score(
+    risk_basis = calculate_risk_basis(
         open_pr_count, time_since_last_merged, oldest_waiting_age, oldest_ready_age
     )
 
@@ -161,7 +169,7 @@ if __name__ == "__main__":
     print(f"Last Merge {round(time_since_last_merged, 1)}h")
     print(f"Oldest Awaiting Approval {round(oldest_waiting_age, 1)}h")
     print(f"Oldest Ready For Merge {round(oldest_ready_age, 1)}h")
-    print(f"Risk: {round(confidence_score, 2)}")
+    print(f"Risk: {round(risk_basis, 2)}")
     print(f"Confidence Percentage: {round(confidence_percentage, 2)}%")
 
     # Save data to CSV
@@ -173,7 +181,7 @@ if __name__ == "__main__":
             round(time_since_last_merged, 1),
             round(oldest_waiting_age, 1),
             round(oldest_ready_age, 1),
-            round(confidence_score, 2),
+            round(risk_basis, 2),
             round(confidence_percentage, 2),
         ]
     )
