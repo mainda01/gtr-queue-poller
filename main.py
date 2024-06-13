@@ -2,6 +2,18 @@ import subprocess
 import json
 from datetime import datetime
 
+# This dimension has the highest impact on confidence because a high number of open PRs suggests a backlog, which directly affects the queue and processing time for new PRs.
+backlog_factor = 2
+
+# This dimension provides insight into the team's recent activity. If PRs are being merged regularly, it indicates an active review process, even if the queue is long.
+activity_factor = 1.5
+
+# This dimension reflects the delay in the review process. If PRs are awaiting approval for a long time, it suggests inefficiencies or unavailability of reviewers.
+delay_factor = 1.5
+
+# This dimension shows how quickly PRs are integrated once they are ready. Delays here might indicate issues in the final stages of merging, but it is less critical than the initial approval.
+queue_factor = 1
+
 
 def run_command(cmd):
     result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
@@ -55,18 +67,6 @@ def calculate_confidence_score(
     open_pr_count, time_since_last_merged, oldest_waiting_age, oldest_ready_age
 ):
 
-    # This dimension has the highest impact on confidence because a high number of open PRs suggests a backlog, which directly affects the queue and processing time for new PRs.
-    backlog_factor = 2
-
-    # This dimension provides insight into the team's recent activity. If PRs are being merged regularly, it indicates an active review process, even if the queue is long.
-    activity_factor = 1.5
-
-    # This dimension reflects the delay in the review process. If PRs are awaiting approval for a long time, it suggests inefficiencies or unavailability of reviewers.
-    delay_factor = 1.5
-
-    # This dimension shows how quickly PRs are integrated once they are ready. Delays here might indicate issues in the final stages of merging, but it is less critical than the initial approval.
-    queue_factor = 1
-
     # Calculate confidence score
     confidence_score = (
         backlog_factor * open_pr_count
@@ -75,21 +75,38 @@ def calculate_confidence_score(
         + queue_factor * oldest_ready_age
     )
 
-    print(f"{open_pr_count} open PRs")
-    print(f"Last Merge {round(time_since_last_merged, 1)}h")
-    print(f"Oldest Awaiting Approval {round(oldest_waiting_age, 1)}h")
-    print(f"Oldest Ready For Merge {round(oldest_ready_age, 1)}h")
-    print(f"Confidence Score: {round(confidence_score, 2)}\n")
-
     return confidence_score
 
 
+def calculate_confidence_percentage(
+    open_pr_count, time_since_last_merged, oldest_waiting_age, oldest_ready_age
+):
+
+    # Normalize each dimension
+    open_pr_normalized = max(0, 1 / open_pr_count)
+    last_merged_normalized = max(0, 1 / time_since_last_merged)
+    oldest_waiting_normalized = max(0, 1 / oldest_waiting_age)
+    oldest_ready_normalized = max(0, 1 / oldest_ready_age)
+
+    weighted_score = (
+        backlog_factor * open_pr_normalized
+        + activity_factor * last_merged_normalized
+        + delay_factor * oldest_waiting_normalized
+        + queue_factor * oldest_ready_normalized
+    )
+
+    # Normalize to percentage (0 to 100)
+    max_weighted_score = backlog_factor + activity_factor + delay_factor + queue_factor
+    confidence_percentage = (weighted_score / max_weighted_score) * 100
+
+    return confidence_percentage
+
+
 if __name__ == "__main__":
-    # run_test_cases()
     last_merged_time = get_last_merged_pr_time()
     if not last_merged_time:
         print("Failed to get last merged PR time")
-        exit
+        exit()
 
     open_pr_count = get_open_pr_count()
     oldest_waiting_for_approval = get_oldest_pr_with_label("Awaiting Approval")
@@ -111,6 +128,17 @@ if __name__ == "__main__":
         else 0
     )
 
-    calculate_confidence_score(
+    confidence_score = calculate_confidence_score(
         open_pr_count, time_since_last_merged, oldest_waiting_age, oldest_ready_age
     )
+
+    confidence_percentage = calculate_confidence_percentage(
+        open_pr_count, time_since_last_merged, oldest_waiting_age, oldest_ready_age
+    )
+
+    print(f"{open_pr_count} open PRs")
+    print(f"Last Merge {round(time_since_last_merged, 1)}h")
+    print(f"Oldest Awaiting Approval {round(oldest_waiting_age, 1)}h")
+    print(f"Oldest Ready For Merge {round(oldest_ready_age, 1)}h")
+    print(f"Risk: {round(confidence_score, 2)}")
+    print(f"Confidence Percentage: {round(confidence_percentage, 2)}%")

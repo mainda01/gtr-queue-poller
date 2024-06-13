@@ -1,4 +1,4 @@
-from main import calculate_confidence_score
+from main import calculate_confidence_score, calculate_confidence_percentage
 
 test_cases = [
     {  # baseline
@@ -82,10 +82,23 @@ test_cases = [
 ]
 
 for i, case in enumerate(test_cases):
-    print(f"Test Case {i+1}:")
-    calculate_confidence_score(
+    print(
+        f"Test Case {i+1}:",
         case["open_pr_count"],
         case["time_since_last_merged"],
         case["oldest_waiting_age"],
         case["oldest_ready_age"],
     )
+    score = calculate_confidence_score(
+        case["open_pr_count"],
+        case["time_since_last_merged"],
+        case["oldest_waiting_age"],
+        case["oldest_ready_age"],
+    )
+    percentage = calculate_confidence_percentage(
+        case["open_pr_count"],
+        case["time_since_last_merged"],
+        case["oldest_waiting_age"],
+        case["oldest_ready_age"],
+    )
+    print(f"score {round(score,1)}, percentage {round(percentage,1)}")
