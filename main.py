@@ -1,6 +1,8 @@
 import subprocess
 import json
 from datetime import datetime
+import csv
+import os
 
 # This dimension has the highest impact on confidence because a high number of open PRs suggests a backlog, which directly affects the queue and processing time for new PRs.
 backlog_factor = 2
@@ -102,6 +104,25 @@ def calculate_confidence_percentage(
     return confidence_percentage
 
 
+def save_to_csv(data, filename="confidence_scores.csv"):
+    file_exists = os.path.isfile(filename)
+    with open(filename, mode="a", newline="") as file:
+        writer = csv.writer(file)
+        if not file_exists:
+            writer.writerow(
+                [
+                    "Timestamp",
+                    "Open PR Count",
+                    "Time Since Last Merge (h)",
+                    "Oldest Waiting Age (h)",
+                    "Oldest Ready Age (h)",
+                    "Confidence Score",
+                    "Confidence Percentage",
+                ]
+            )
+        writer.writerow(data)
+
+
 if __name__ == "__main__":
     last_merged_time = get_last_merged_pr_time()
     if not last_merged_time:
@@ -142,3 +163,17 @@ if __name__ == "__main__":
     print(f"Oldest Ready For Merge {round(oldest_ready_age, 1)}h")
     print(f"Risk: {round(confidence_score, 2)}")
     print(f"Confidence Percentage: {round(confidence_percentage, 2)}%")
+
+    # Save data to CSV
+    timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+    save_to_csv(
+        [
+            timestamp,
+            open_pr_count,
+            round(time_since_last_merged, 1),
+            round(oldest_waiting_age, 1),
+            round(oldest_ready_age, 1),
+            round(confidence_score, 2),
+            round(confidence_percentage, 2),
+        ]
+    )
